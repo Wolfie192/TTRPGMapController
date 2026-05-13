@@ -1,0 +1,8 @@
+[project]
+name = "testproject"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pillow",
+    "pyinstaller>=6.20.0",
+]

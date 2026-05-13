@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# PyInstaller
+#  The dist/ and build/ folders are created during the build process
+build/
+dist/
+*.spec
+
+# IDEs
+.idea/
+.vscode/
+
+# Local library data (adjust if you want to include default maps)
+library/
