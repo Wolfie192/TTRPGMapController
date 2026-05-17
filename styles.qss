@@ -1,0 +1,100 @@
+/* General Application Styling */
+QMainWindow {
+    background-color: #332d27; /* Dark brown/grey background */
+    color: #e0d8c7; /* Light parchment-like text color */
+    font-family: "Georgia", serif; /* A classic, readable font */
+    font-size: 14px;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #5c4a3a; /* Darker brown for buttons */
+    border: 2px solid #8b7355; /* Gold/brass border */
+    border-radius: 5px;
+    color: #e0d8c7;
+    padding: 8px 15px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #6e5a4a; /* Slightly lighter on hover */
+    border-color: #a08a6d;
+}
+
+QPushButton:pressed {
+    background-color: #4a3b2e; /* Darker when pressed */
+    border-color: #7a634a;
+}
+
+/* Specific style for the small scale buttons */
+QPushButton#scaleMinusButton, QPushButton#scalePlusButton {
+    padding: 2px 5px; /* Reduced padding for small buttons */
+}
+
+/* Labels */
+QLabel {
+    color: #e0d8c7;
+}
+
+/* Line Edits (for scale input) */
+QLineEdit {
+    background-color: #2a2520; /* Dark background for input */
+    border: 1px solid #8b7355;
+    border-radius: 3px;
+    color: #e0d8c7;
+    padding: 3px;
+}
+
+/* Sliders */
+QSlider::groove:horizontal {
+    border: 1px solid #4a3b2e;
+    height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
+    background: #5c4a3a;
+    margin: 2px 0;
+    border-radius: 4px;
+}
+
+QSlider::handle:horizontal {
+    background: #8b7355; /* Gold/brass handle */
+    border: 1px solid #a08a6d;
+    width: 18px;
+    margin: -5px 0; /* handle is 16px wide, so make it go 2px into the groove */
+    border-radius: 9px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #a08a6d;
+}
+
+/* QGraphicsView (map display) */
+QGraphicsView {
+    background-color: #2a2520; /* Dark background for the map area */
+    border: 2px solid #8b7355; /* Themed border for the map view */
+}
+
+/* ScrollBars (for QGraphicsView) */
+QScrollBar:horizontal, QScrollBar:vertical {
+    border: 1px solid #4a3b2e;
+    background: #332d27;
+}
+
+QScrollBar::handle:horizontal, QScrollBar::handle:vertical {
+    background: #5c4a3a;
+    border: 1px solid #8b7355;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:horizontal:hover, QScrollBar::handle:vertical:hover {
+    background: #6e5a4a;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal,
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
