@@ -1,12 +1,11 @@
+import json
 from PyQt6.QtWidgets import (
 QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 QLabel, QFileDialog,  QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
 QSlider, QLineEdit, QApplication
 )
 from PyQt6.QtGui import QPixmap, QMouseEvent, QTransform, QIntValidator, QPainter
-from PyQt6.QtCore import Qt, QPointF, pyqtSignal, QBuffer, QIODevice
-from PIL import Image
-import io
+from PyQt6.QtCore import Qt, QPointF, pyqtSignal
 
 class ControlScreen(QMainWindow):
     map_loaded = pyqtSignal(QPixmap)
@@ -24,7 +23,7 @@ class ControlScreen(QMainWindow):
 
         self.scene = QGraphicsScene(self)
         self.view =  QGraphicsView(self.scene)
-        self.view.setRenderHints(QPainter.RenderHint.Antialiasing)
+        self.view.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
         self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -32,9 +31,13 @@ class ControlScreen(QMainWindow):
 
         self.pixmap_item = None
         self.original_pixmap = None
+        self.current_map_path = None
 
         self.control_view_scale = 1.0
         self.player_target_scale = 1.0
+        self.current_rotation = 0
+
+        self.map_history = self._load_history()
 
         self._pan = False
         self._pan_start_point = QPointF()
@@ -46,15 +49,15 @@ class ControlScreen(QMainWindow):
         self.load_map_button.clicked.connect(self._load_map)
         controls_layout.addWidget(self.load_map_button)
 
-        self.upscale_map_button = QPushButton("Upscale Map")
-        self.upscale_map_button.clicked.connect(self._upscale_map)
-        self.upscale_map_button.setEnabled(False)
-        controls_layout.addWidget(self.upscale_map_button)
-
         self.recenter_map_button = QPushButton("Re-Center Maps")
         self.recenter_map_button.clicked.connect(self._recenter_map)
         self.recenter_map_button.setEnabled(False)
         controls_layout.addWidget(self.recenter_map_button)
+
+        self.rotate_map_button = QPushButton("Rotate 90°")
+        self.rotate_map_button.clicked.connect(self._rotate_map)
+        self.rotate_map_button.setEnabled(False)
+        controls_layout.addWidget(self.rotate_map_button)
 
         scale_label = QLabel("Map Scale:")
         controls_layout.addWidget(scale_label)
@@ -90,68 +93,93 @@ class ControlScreen(QMainWindow):
         self.view.mouseReleaseEvent = self._view_mouse_release_event
         self.view.wheelEvent = self._view_wheel_event
 
+    def _load_history(self):
+        try:
+            with open("map_settings.json", "r") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _save_history(self):
+        with open("map_settings.json", "w") as f:
+            json.dump(self.map_history, f, indent=4)
+
+    def _save_current_map_state(self):
+        if self.current_map_path and self.pixmap_item:
+            self.map_history[self.current_map_path] = {
+                "pos": [self.pixmap_item.pos().x(), self.pixmap_item.pos().y()],
+                "player_scale": self.player_target_scale,
+                "control_scale": self.control_view_scale,
+                "rotation": self.current_rotation
+            }
+
     def _load_map(self):
         file_dialog = QFileDialog(self)
         file_dialog.setNameFilter("Images (*.png *.jpg *.jpeg *.bmp)")
         if file_dialog.exec():
+            self._save_current_map_state()
             file_path = file_dialog.selectedFiles()[0]
-            pixmap = QPixmap(file_path)
+            self.current_map_path = file_path
+            
+            pixmap = QPixmap(self.current_map_path)
             if not pixmap.isNull():
+                state = self.map_history.get(self.current_map_path)
+                if state:
+                    self.current_rotation = state.get("rotation", 0)
+                    if self.current_rotation != 0:
+                        t = QTransform().rotate(self.current_rotation)
+                        pixmap = pixmap.transformed(t, Qt.TransformationMode.SmoothTransformation)
+                else:
+                    self.current_rotation = 0
+                
                 self.original_pixmap = pixmap
-                self._display_pixmap(pixmap)
-                self.upscale_map_button.setEnabled(True)
+                self._display_pixmap(pixmap, state)
                 self.recenter_map_button.setEnabled(True)
+                self.rotate_map_button.setEnabled(True)
             else:
                 print("Failed to load image.")
 
-    def _display_pixmap(self, pixmap: QPixmap):
+    def _display_pixmap(self, pixmap: QPixmap, state=None):
         self.scene.clear()
         self.pixmap_item = QGraphicsPixmapItem(pixmap)
         self.scene.addItem(self.pixmap_item)
-        self.pixmap_item.setPos(0, 0)
         self.view.setSceneRect(self.pixmap_item.boundingRect())
 
-        self.view.setTransform(QTransform())
-        self.control_view_scale = 1.0
-
-        self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
-        self.control_view_scale = self.view.transform().m11()
-
-        self.player_target_scale = 1.0
-        self.scale_slider.setValue(100)
-        self.scale_input.setText("100")
+        if state:
+            self.pixmap_item.setPos(QPointF(state["pos"][0], state["pos"][1]))
+            self.player_target_scale = state["player_scale"]
+            self.control_view_scale = state["control_scale"]
+            
+            # Update UI
+            val = int(self.player_target_scale * 100)
+            self.scale_slider.blockSignals(True)
+            self.scale_slider.setValue(val)
+            self.scale_slider.blockSignals(False)
+            self.scale_input.setText(str(val))
+            
+            # Apply View Transform
+            self.view.setTransform(QTransform().scale(self.control_view_scale, self.control_view_scale))
+        else:
+            self.pixmap_item.setPos(0, 0)
+            self.view.setTransform(QTransform())
+            self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+            self.control_view_scale = self.view.transform().m11()
+            self.player_target_scale = 1.0
+            self.scale_slider.setValue(100)
+            self.scale_input.setText("100")
 
         self.map_loaded.emit(pixmap)
         self._emit_map_view_state()
 
-    def _upscale_map(self):
+    def _rotate_map(self):
         if self.original_pixmap is None:
             return
 
-        factor = 2
-
-        buffer = QBuffer()
-        buffer.open(QIODevice.OpenModeFlag.ReadWrite)
-        self.original_pixmap.save(buffer, "PNG")
-        pil_image = Image.open(io.BytesIO(buffer.data().data()))
-        buffer.close()
-
-        new_width = pil_image.width * factor
-        new_height = pil_image.height * factor
-
-        upscaled_pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
-
-        img_byte_arr = io.BytesIO()
-        upscaled_pil_image.save(img_byte_arr, format='PNG')
-        img_byte_arr.seek(0)
-
-        new_pixmap = QPixmap()
-        new_pixmap.loadFromData(img_byte_arr.getvalue(), 'PNG')
-
-        if not new_pixmap.isNull():
-            self._display_pixmap(new_pixmap)
-        else:
-            print("Failed to upscale image.")
+        # Rotate the pixmap data 90 degrees clockwise
+        self.current_rotation = (self.current_rotation + 90) % 360
+        transform = QTransform().rotate(90)
+        self.original_pixmap = self.original_pixmap.transformed(transform, Qt.TransformationMode.SmoothTransformation)
+        self._display_pixmap(self.original_pixmap)
 
     def _recenter_map(self):
         if self.pixmap_item is None:
@@ -234,5 +262,7 @@ class ControlScreen(QMainWindow):
             self.view_state_changed.emit(self.pixmap_item.pos(), self.player_target_scale)
 
     def closeEvent(self, event):
+        self._save_current_map_state()
+        self._save_history()
         self.closing.emit()
         super().closeEvent(event)

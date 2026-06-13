@@ -14,7 +14,7 @@ class PlayerScreen(QMainWindow):
 
         self.scene = QGraphicsScene(self)
         self.view = QGraphicsView(self.scene)
-        self.view.setRenderHints(QPainter.RenderHint.Antialiasing)
+        self.view.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
         self.view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.view.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.view.setInteractive(False)
