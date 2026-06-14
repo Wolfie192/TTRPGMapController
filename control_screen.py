@@ -6,10 +6,11 @@ QSlider, QLineEdit, QApplication
 )
 from PyQt6.QtGui import QPixmap, QMouseEvent, QTransform, QIntValidator, QPainter
 from PyQt6.QtCore import Qt, QPointF, pyqtSignal
+from PyQt6.QtSvgWidgets import QGraphicsSvgItem
 
 class ControlScreen(QMainWindow):
-    map_loaded = pyqtSignal(QPixmap)
-    view_state_changed = pyqtSignal(QPointF, float)
+    map_loaded = pyqtSignal(str, float)
+    view_state_changed = pyqtSignal(QPointF, float, float)
     closing = pyqtSignal()
 
     def __init__(self):
@@ -29,7 +30,7 @@ class ControlScreen(QMainWindow):
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         main_layout.addWidget(self.view)
 
-        self.pixmap_item = None
+        self.map_item = None
         self.original_pixmap = None
         self.current_map_path = None
 
@@ -105,9 +106,9 @@ class ControlScreen(QMainWindow):
             json.dump(self.map_history, f, indent=4)
 
     def _save_current_map_state(self):
-        if self.current_map_path and self.pixmap_item:
+        if self.current_map_path and self.map_item:
             self.map_history[self.current_map_path] = {
-                "pos": [self.pixmap_item.pos().x(), self.pixmap_item.pos().y()],
+                "pos": [self.map_item.pos().x(), self.map_item.pos().y()],
                 "player_scale": self.player_target_scale,
                 "control_scale": self.control_view_scale,
                 "rotation": self.current_rotation
@@ -115,40 +116,50 @@ class ControlScreen(QMainWindow):
 
     def _load_map(self):
         file_dialog = QFileDialog(self)
-        file_dialog.setNameFilter("Images (*.png *.jpg *.jpeg *.bmp)")
+        file_dialog.setNameFilter("Images (*.png *.jpg *.jpeg *.bmp *.svg)")
         if file_dialog.exec():
             self._save_current_map_state()
             file_path = file_dialog.selectedFiles()[0]
             self.current_map_path = file_path
             
-            pixmap = QPixmap(self.current_map_path)
-            if not pixmap.isNull():
-                state = self.map_history.get(self.current_map_path)
-                if state:
-                    self.current_rotation = state.get("rotation", 0)
-                    if self.current_rotation != 0:
-                        t = QTransform().rotate(self.current_rotation)
-                        pixmap = pixmap.transformed(t, Qt.TransformationMode.SmoothTransformation)
-                else:
-                    self.current_rotation = 0
-                
-                self.original_pixmap = pixmap
-                self._display_pixmap(pixmap, state)
-                self.recenter_map_button.setEnabled(True)
-                self.rotate_map_button.setEnabled(True)
+            state = self.map_history.get(self.current_map_path)
+            if state:
+                self.current_rotation = state.get("rotation", 0)
             else:
-                print("Failed to load image.")
+                self.current_rotation = 0
+                
+            self._display_map(file_path, state)
+            self.recenter_map_button.setEnabled(True)
+            self.rotate_map_button.setEnabled(True)
 
-    def _display_pixmap(self, pixmap: QPixmap, state=None):
+    def _display_map(self, file_path: str, state=None):
         self.scene.clear()
-        self.pixmap_item = QGraphicsPixmapItem(pixmap)
-        self.scene.addItem(self.pixmap_item)
-        self.view.setSceneRect(self.pixmap_item.boundingRect())
+        
+        is_svg = file_path.lower().endswith('.svg')
+        if is_svg:
+            self.map_item = QGraphicsSvgItem(file_path)
+            self.original_pixmap = None
+        else:
+            pixmap = QPixmap(file_path)
+            if pixmap.isNull():
+                print("Failed to load image.")
+                self.map_item = None
+                self.original_pixmap = None
+                return
+            self.map_item = QGraphicsPixmapItem(pixmap)
+            self.original_pixmap = pixmap
+
+        self.scene.addItem(self.map_item)
+        self.view.setSceneRect(self.map_item.boundingRect())
+
+        # Set transform origin to center for rotation
+        self.map_item.setTransformOriginPoint(self.map_item.boundingRect().center())
 
         if state:
-            self.pixmap_item.setPos(QPointF(state["pos"][0], state["pos"][1]))
+            self.map_item.setPos(QPointF(state["pos"][0], state["pos"][1]))
             self.player_target_scale = state["player_scale"]
             self.control_view_scale = state["control_scale"]
+            self.current_rotation = state.get("rotation", 0)
             
             # Update UI
             val = int(self.player_target_scale * 100)
@@ -160,52 +171,52 @@ class ControlScreen(QMainWindow):
             # Apply View Transform
             self.view.setTransform(QTransform().scale(self.control_view_scale, self.control_view_scale))
         else:
-            self.pixmap_item.setPos(0, 0)
+            self.map_item.setPos(0, 0)
             self.view.setTransform(QTransform())
-            self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+            self.view.fitInView(self.map_item, Qt.AspectRatioMode.KeepAspectRatio)
             self.control_view_scale = self.view.transform().m11()
             self.player_target_scale = 1.0
             self.scale_slider.setValue(100)
             self.scale_input.setText("100")
 
-        self.map_loaded.emit(pixmap)
+        self.map_item.setRotation(self.current_rotation)
+        
+        self.map_loaded.emit(file_path, self.current_rotation)
         self._emit_map_view_state()
 
     def _rotate_map(self):
-        if self.original_pixmap is None:
+        if self.map_item is None:
             return
 
-        # Rotate the pixmap data 90 degrees clockwise
         self.current_rotation = (self.current_rotation + 90) % 360
-        transform = QTransform().rotate(90)
-        self.original_pixmap = self.original_pixmap.transformed(transform, Qt.TransformationMode.SmoothTransformation)
-        self._display_pixmap(self.original_pixmap)
+        self.map_item.setRotation(self.current_rotation)
+        self._emit_map_view_state()
 
     def _recenter_map(self):
-        if self.pixmap_item is None:
+        if self.map_item is None:
             return
 
         self.view.setTransform(QTransform())
         self.control_view_scale = 1.0
-        self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+        self.view.fitInView(self.map_item, Qt.AspectRatioMode.KeepAspectRatio)
         self.control_view_scale = self.view.transform().m11()
-        self.pixmap_item.setPos(0, 0)
+        self.map_item.setPos(0, 0)
 
         self._emit_map_view_state()
 
     def _view_mouse_press_event(self, event: QMouseEvent):
-        if event.button() == Qt.MouseButton.LeftButton and self.pixmap_item:
+        if event.button() == Qt.MouseButton.LeftButton and self.map_item:
             self._pan = True
             self._pan_start_point = self.view.mapToScene(event.position().toPoint())
             self.view.setCursor(Qt.CursorShape.ClosedHandCursor)
         super(QGraphicsView, self.view).mousePressEvent(event)
 
     def _view_mouse_move_event(self, event: QMouseEvent):
-        if self._pan and self.pixmap_item:
+        if self._pan and self.map_item:
             current_mouse_pos_scene = self.view.mapToScene(event.position().toPoint())
             delta_scene = current_mouse_pos_scene - self._pan_start_point
 
-            self.pixmap_item.setPos(self.pixmap_item.pos() + delta_scene)
+            self.map_item.setPos(self.map_item.pos() + delta_scene)
 
             self._pan_start_point = current_mouse_pos_scene
             self._emit_map_view_state()
@@ -258,8 +269,8 @@ class ControlScreen(QMainWindow):
         self.scale_slider.setValue(new_value)
 
     def _emit_map_view_state(self):
-        if self.pixmap_item:
-            self.view_state_changed.emit(self.pixmap_item.pos(), self.player_target_scale)
+        if self.map_item:
+            self.view_state_changed.emit(self.map_item.pos(), self.player_target_scale, self.current_rotation)
 
     def closeEvent(self, event):
         self._save_current_map_state()

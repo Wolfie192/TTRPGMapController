@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
 from PyQt6.QtGui import QPixmap, QTransform, QPainter
 from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtSvgWidgets import QGraphicsSvgItem
 
 class PlayerScreen(QMainWindow):
     def __init__(self):
@@ -22,22 +23,35 @@ class PlayerScreen(QMainWindow):
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         layout.addWidget(self.view)
 
-        self.pixmap_item = None
+        self.map_item = None
 
-    def load_map(self, pixmap: QPixmap):
+    def load_map(self, file_path: str, rotation: float):
         self.scene.clear()
-        if not pixmap.isNull():
-            self.pixmap_item = QGraphicsPixmapItem(pixmap)
-            self.scene.addItem(self.pixmap_item)
-            self.view.setSceneRect(self.pixmap_item.boundingRect())
-            self.pixmap_item.setPos(0, 0)
+        if file_path:
+            is_svg = file_path.lower().endswith('.svg')
+            if is_svg:
+                self.map_item = QGraphicsSvgItem(file_path)
+            else:
+                pixmap = QPixmap(file_path)
+                if pixmap.isNull():
+                    print("Failed to load image in player screen.")
+                    self.map_item = None
+                    return
+                self.map_item = QGraphicsPixmapItem(pixmap)
 
-    def update_map_view(self, map_item_pos: QPointF, scale_factor: float):
-        if self.pixmap_item is None:
+            self.scene.addItem(self.map_item)
+            self.map_item.setTransformOriginPoint(self.map_item.boundingRect().center())
+            self.map_item.setRotation(rotation)
+            self.map_item.setPos(0, 0)
+            self.view.setSceneRect(self.map_item.sceneBoundingRect())
+
+    def update_map_view(self, map_item_pos: QPointF, scale_factor: float, rotation: float):
+        if self.map_item is None:
             return
 
         transform = QTransform()
         transform.scale(scale_factor, scale_factor)
         self.view.setTransform(transform)
 
-        self.pixmap_item.setPos(map_item_pos)
+        self.map_item.setPos(map_item_pos)
+        self.map_item.setRotation(rotation)
