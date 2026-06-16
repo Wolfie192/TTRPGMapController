@@ -55,3 +55,11 @@ class PlayerScreen(QMainWindow):
 
         self.map_item.setPos(map_item_pos)
         self.map_item.setRotation(rotation)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_F11 or event.key() == Qt.Key.Key_F:
+            if self.isFullScreen():
+                self.showNormal()
+            else:
+                self.showFullScreen()
+        super().keyPressEvent(event)

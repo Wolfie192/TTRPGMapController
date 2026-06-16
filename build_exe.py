@@ -7,7 +7,7 @@ def build():
         entry_point,
         '--onefile',
         '--noconsole',
-        '--name=TTRPG_MapTool',
+        '--name=Tabletop Map Tool',
         '--add-data=styles.qss;.',
         '--clean',
     ]
