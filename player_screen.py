@@ -14,9 +14,11 @@ class PlayerScreen(QMainWindow):
         layout = QVBoxLayout(central_widget)
 
         self.scene = QGraphicsScene(self)
+        self.scene.setSceneRect(-100000, -100000, 200000, 200000)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
         self.view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.view.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.view.setInteractive(False)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -42,8 +44,8 @@ class PlayerScreen(QMainWindow):
             self.scene.addItem(self.map_item)
             self.map_item.setTransformOriginPoint(self.map_item.boundingRect().center())
             self.map_item.setRotation(rotation)
-            self.map_item.setPos(0, 0)
-            self.view.setSceneRect(self.map_item.sceneBoundingRect())
+            self.map_item.setPos(-self.map_item.boundingRect().center())
+            self.view.centerOn(0, 0)
 
     def update_map_view(self, map_item_pos: QPointF, scale_factor: float, rotation: float):
         if self.map_item is None:
@@ -52,6 +54,7 @@ class PlayerScreen(QMainWindow):
         transform = QTransform()
         transform.scale(scale_factor, scale_factor)
         self.view.setTransform(transform)
+        self.view.centerOn(0, 0)
 
         self.map_item.setPos(map_item_pos)
         self.map_item.setRotation(rotation)

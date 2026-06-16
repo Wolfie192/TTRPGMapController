@@ -23,9 +23,11 @@ class ControlScreen(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
 
         self.scene = QGraphicsScene(self)
+        self.scene.setSceneRect(-100000, -100000, 200000, 200000)
         self.view =  QGraphicsView(self.scene)
         self.view.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
         self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         main_layout.addWidget(self.view)
@@ -34,7 +36,6 @@ class ControlScreen(QMainWindow):
         self.original_pixmap = None
         self.current_map_path = None
 
-        self.control_view_scale = 1.0
         self.player_target_scale = 1.0
         self.current_rotation = 0
 
@@ -110,7 +111,6 @@ class ControlScreen(QMainWindow):
             self.map_history[self.current_map_path] = {
                 "pos": [self.map_item.pos().x(), self.map_item.pos().y()],
                 "player_scale": self.player_target_scale,
-                "control_scale": self.control_view_scale,
                 "rotation": self.current_rotation
             }
 
@@ -150,15 +150,14 @@ class ControlScreen(QMainWindow):
             self.original_pixmap = pixmap
 
         self.scene.addItem(self.map_item)
-        self.view.setSceneRect(self.map_item.boundingRect())
 
         # Set transform origin to center for rotation
         self.map_item.setTransformOriginPoint(self.map_item.boundingRect().center())
+        self.view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
 
         if state:
             self.map_item.setPos(QPointF(state["pos"][0], state["pos"][1]))
             self.player_target_scale = state["player_scale"]
-            self.control_view_scale = state["control_scale"]
             self.current_rotation = state.get("rotation", 0)
             
             # Update UI
@@ -169,15 +168,17 @@ class ControlScreen(QMainWindow):
             self.scale_input.setText(str(val))
             
             # Apply View Transform
-            self.view.setTransform(QTransform().scale(self.control_view_scale, self.control_view_scale))
+            self.view.setTransform(QTransform().scale(self.player_target_scale, self.player_target_scale))
+            self.view.centerOn(0, 0)
         else:
-            self.map_item.setPos(0, 0)
-            self.view.setTransform(QTransform())
+            # Center the map item on the scene origin
+            self.map_item.setPos(-self.map_item.boundingRect().center())
+            
             self.view.fitInView(self.map_item, Qt.AspectRatioMode.KeepAspectRatio)
-            self.control_view_scale = self.view.transform().m11()
-            self.player_target_scale = 1.0
-            self.scale_slider.setValue(100)
-            self.scale_input.setText("100")
+            self.player_target_scale = self.view.transform().m11()
+            self.scale_slider.setValue(int(self.player_target_scale * 100))
+            self.scale_input.setText(str(self.scale_slider.value()))
+            self.view.centerOn(0, 0)
 
         self.map_item.setRotation(self.current_rotation)
         
@@ -196,12 +197,9 @@ class ControlScreen(QMainWindow):
         if self.map_item is None:
             return
 
-        self.view.setTransform(QTransform())
-        self.control_view_scale = 1.0
-        self.view.fitInView(self.map_item, Qt.AspectRatioMode.KeepAspectRatio)
-        self.control_view_scale = self.view.transform().m11()
-        self.map_item.setPos(0, 0)
-
+        # Move the center of the map image to the center of the screen (origin)
+        self.map_item.setPos(-self.map_item.boundingRect().center())
+        self.view.centerOn(0, 0)
         self._emit_map_view_state()
 
     def _view_mouse_press_event(self, event: QMouseEvent):
@@ -231,19 +229,20 @@ class ControlScreen(QMainWindow):
 
     def _view_wheel_event(self, event):
         zoom_factor = 1.15
+        current_value = self.scale_slider.value()
         if event.angleDelta().y() > 0:
-            self.view.scale(zoom_factor, zoom_factor)
-            self.control_view_scale *= zoom_factor
+            new_value = int(current_value * zoom_factor)
         else:
-            self.view.scale(1 / zoom_factor, 1 / zoom_factor)
-            self.control_view_scale /= zoom_factor
-
-        self._emit_map_view_state()
-        super(QGraphicsView, self.view).wheelEvent(event)
+            new_value = int(current_value / zoom_factor)
+        
+        # Clamp value and set slider, which triggers synchronization
+        self.scale_slider.setValue(max(self.scale_slider.minimum(), min(self.scale_slider.maximum(), new_value)))
 
     def _on_player_scale_slider_changed(self, value):
         self.player_target_scale = value / 100.0
         self.scale_input.setText(str(value))
+        # Apply the same scale to the GM view
+        self.view.setTransform(QTransform().scale(self.player_target_scale, self.player_target_scale))
         self._emit_map_view_state()
 
     def _on_player_scale_input_finished(self):
