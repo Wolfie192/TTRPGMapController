@@ -27,6 +27,15 @@ class PlayerScreen(QMainWindow):
         layout.addWidget(self.view)
 
         self.map_item = None
+        self.zoom_factor = 1.0
+
+    def _get_base_scale(self):
+        if not self.map_item:
+            return 1.0
+        rect = self.map_item.boundingRect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return 1.0
+        return min(self.view.viewport().width() / rect.width(), self.view.viewport().height() / rect.height())
 
     def load_map(self, file_path: str, rotation: float):
         self.scene.clear()
@@ -47,18 +56,24 @@ class PlayerScreen(QMainWindow):
             self.map_item.setRotation(rotation)
             self.map_item.setPos(-self.map_item.boundingRect().center())
             self.view.centerOn(0, 0)
+            self._apply_view_transform()
 
-    def update_map_view(self, map_item_pos: QPointF, scale_factor: float, rotation: float):
+    def update_map_view(self, map_item_pos: QPointF, zoom_factor: float, rotation: float):
         if self.map_item is None:
             return
 
-        transform = QTransform()
-        transform.scale(scale_factor, scale_factor)
-        self.view.setTransform(transform)
-        self.view.centerOn(0, 0)
-
+        self.zoom_factor = zoom_factor
         self.map_item.setPos(map_item_pos)
         self.map_item.setRotation(rotation)
+        self._apply_view_transform()
+
+    def _apply_view_transform(self):
+        if not self.map_item:
+            return
+        base = self._get_base_scale()
+        total_scale = base * self.zoom_factor
+        self.view.setTransform(QTransform().scale(total_scale, total_scale))
+        self.view.centerOn(0, 0)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_F11 or event.key() == Qt.Key.Key_F:
@@ -67,3 +82,8 @@ class PlayerScreen(QMainWindow):
             else:
                 self.showFullScreen()
         super().keyPressEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.map_item:
+            self._apply_view_transform()

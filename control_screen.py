@@ -37,7 +37,7 @@ class ControlScreen(QMainWindow):
         self.original_pixmap = None
         self.current_map_path = None
 
-        self.player_target_scale = 1.0
+        self.zoom_factor = 1.0
         self.current_rotation = 0
 
         self.map_history = self._load_history()
@@ -111,7 +111,7 @@ class ControlScreen(QMainWindow):
         if self.current_map_path and self.map_item:
             self.map_history[self.current_map_path] = {
                 "pos": [self.map_item.pos().x(), self.map_item.pos().y()],
-                "player_scale": self.player_target_scale,
+                "zoom_factor": self.zoom_factor,
                 "rotation": self.current_rotation
             }
 
@@ -132,6 +132,14 @@ class ControlScreen(QMainWindow):
             self._display_map(file_path, state)
             self.recenter_map_button.setEnabled(True)
             self.rotate_map_button.setEnabled(True)
+
+    def _get_base_scale(self):
+        if not self.map_item:
+            return 1.0
+        rect = self.map_item.boundingRect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return 1.0
+        return min(self.view.viewport().width() / rect.width(), self.view.viewport().height() / rect.height())
 
     def _display_map(self, file_path: str, state=None):
         self.scene.clear()
@@ -158,28 +166,24 @@ class ControlScreen(QMainWindow):
 
         if state:
             self.map_item.setPos(QPointF(state["pos"][0], state["pos"][1]))
-            self.player_target_scale = state["player_scale"]
+            self.zoom_factor = state.get("zoom_factor", 1.0)
             self.current_rotation = state.get("rotation", 0)
             
             # Update UI
-            val = int(self.player_target_scale * 100)
+            val = int(self.zoom_factor * 100)
             self.scale_slider.blockSignals(True)
             self.scale_slider.setValue(val)
             self.scale_slider.blockSignals(False)
             self.scale_input.setText(str(val))
-            
-            # Apply View Transform
-            self.view.setTransform(QTransform().scale(self.player_target_scale, self.player_target_scale))
-            self.view.centerOn(0, 0)
         else:
             # Center the map item on the scene origin
             self.map_item.setPos(-self.map_item.boundingRect().center())
-            
-            self.view.fitInView(self.map_item, Qt.AspectRatioMode.KeepAspectRatio)
-            self.player_target_scale = self.view.transform().m11()
-            self.scale_slider.setValue(int(self.player_target_scale * 100))
-            self.scale_input.setText(str(self.scale_slider.value()))
-            self.view.centerOn(0, 0)
+            self.zoom_factor = 1.0
+
+        self._apply_view_transform()
+
+        if not state:
+            self.scale_slider.setValue(int(self.zoom_factor * 100))
 
         self.map_item.setRotation(self.current_rotation)
         
@@ -239,11 +243,18 @@ class ControlScreen(QMainWindow):
         # Clamp value and set slider, which triggers synchronization
         self.scale_slider.setValue(max(self.scale_slider.minimum(), min(self.scale_slider.maximum(), new_value)))
 
+    def _apply_view_transform(self):
+        if not self.map_item:
+            return
+        base = self._get_base_scale()
+        total_scale = base * self.zoom_factor
+        self.view.setTransform(QTransform().scale(total_scale, total_scale))
+        self.view.centerOn(0, 0)
+
     def _on_player_scale_slider_changed(self, value):
-        self.player_target_scale = value / 100.0
+        self.zoom_factor = value / 100.0
         self.scale_input.setText(str(value))
-        # Apply the same scale to the GM view
-        self.view.setTransform(QTransform().scale(self.player_target_scale, self.player_target_scale))
+        self._apply_view_transform()
         self._emit_map_view_state()
 
     def _on_player_scale_input_finished(self):
@@ -265,12 +276,17 @@ class ControlScreen(QMainWindow):
     def _decrease_player_scale(self):
         step = 10 if QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier else 1
         current_value = self.scale_slider.value()
-        new_value = min(self.scale_slider.maximum(), current_value - step)
+        new_value = max(self.scale_slider.minimum(), current_value - step)
         self.scale_slider.setValue(new_value)
 
     def _emit_map_view_state(self):
         if self.map_item:
-            self.view_state_changed.emit(self.map_item.pos(), self.player_target_scale, self.current_rotation)
+            self.view_state_changed.emit(self.map_item.pos(), self.zoom_factor, self.current_rotation)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.map_item:
+            self._apply_view_transform()
 
     def closeEvent(self, event):
         self._save_current_map_state()
