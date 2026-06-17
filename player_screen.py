@@ -20,6 +20,7 @@ class PlayerScreen(QMainWindow):
         self.view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.view.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.view.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
         self.view.setInteractive(False)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
