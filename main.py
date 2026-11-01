@@ -10,7 +10,7 @@ class MapControllerApp(QApplication):
     def __init__(self, argv):
         super().__init__(argv)
         stylesheet_path = resource_path(Path("./styles.qss"))
-        self._load_stylesheet(str(stylesheet_path.absolute()))
+        self._load_stylesheet(str(stylesheet_path))
 
         self.control_screen = ControlScreen()
         self.player_screen = PlayerScreen()
@@ -38,10 +38,9 @@ class MapControllerApp(QApplication):
         self.quit()
 
 def resource_path(relative_path):
-    try:
-        base_path = Path(sys._MEIPASS)
-    except Exception:
-        base_path = Path(".").absolute()
+    # PyInstaller extracts bundled resources to _MEIPASS. When running from
+    # source, resolve them beside this file rather than from the shell's cwd.
+    base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
     return base_path / relative_path
 
